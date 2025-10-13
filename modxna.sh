@@ -4,7 +4,7 @@
 ## modXNA.sh                                        ##
 ## Script to generate modified nucleotides.         ##
 ######################################################
-VERSION='1.7'
+VERSION='1.8'
 
 # Check for required programs
 if [ -z "$CPPTRAJ" ] ; then
@@ -73,8 +73,11 @@ if [ -z "$LEAP" ] ; then
 fi
 
 # Variables
+SUMMARY_CONTENTS=""
 TEST=0
 LENGTH=1
+IS_5CAP=0
+IS_3CAP=0
 
 # Library path for the templates
 export DAT=$(pwd)
@@ -90,11 +93,9 @@ Help() {
   echo "  Input file format : <backbone> <sugar> <base>"
   echo ""
   echo " Optional:"
-  echo "  -m <name>         : Optional name of generated residue instead of random name"
-  echo "  -l <length>       : Length of the ASO to build (default is 1)"
-  echo "  -c <method>       : Charge calculation method {am* | gaussian}"
-  echo "  -r <mol2 file>    : Restart generation of parameter files"
-  echo "     <gaussian log file>"
+  echo "  -m <name>    : Optional name of generated residue instead of random name"
+  echo "  --5cap       : Create a 5'-terminal residue"
+  echo "  --3cap       : Create a 3'-terminal residue"
   exit 1 # Exit script after printing help
 }
 
@@ -119,8 +120,9 @@ echo "CPPTRAJ version $cc_version_major.$cc_version_minor.$cc_version_patch dete
 while [ ! -z "$1" ] ; do
   case "$1" in
     '-i'            ) shift ; INPUT=$1 ;;
-    '-l'            ) shift ; LENGTH=$1 ;;
     '-m'            ) shift ; RESNAME=$1 ;;
+    '--5cap'        ) IS_5CAP=1 ;;
+    '--3cap'        ) IS_3CAP=1 ;;
     '-h' | '--help' ) Help ; exit 0 ;;
     *               ) echo "Unrecognized command line option: $1" ; exit 1 ;;
   esac
@@ -155,6 +157,9 @@ while read OPTLINE ; do
 
     fi
 
+    [[ $OPTLINE = \#* || -z "$OPTLINE" ]] && continue
+    SUMMARY_CONTENTS+="  $OPTLINE"$'\n'
+    
     echo "  ==========================================================="
     echo "  New residue number :" $LENGTH
     echo "  New residue name is: "$RESNAME
@@ -227,10 +232,14 @@ while read OPTLINE ; do
     cp $DATSU/$SUGAR.mol2 tmp.sugar.mol2
     cp $DATBB/$BACKBONE.mol2 tmp.bb.mol2
 
-    # Always copy O3' bb charge to sugar
+    # Copy O3' charge from backbone to sugar
+    if [ $IS_5CAP -eq 1 ]; then
+      # 5'-fragment does not have an O3' atom
+      VALBO=$(grep "O5' " tmp.bb.mol2 | awk '{print $9}')
+    else
+      VALBO=$(grep "O3' " tmp.bb.mol2 | awk '{print $9}')
+    fi    
     VALSO=$(grep "O3' " tmp.sugar.mol2 | awk '{print $9}')
-    #CHRISTINA: recheck backbone OP3 vs O3' names in final modules!!!
-    VALBO=$(grep "O3' " tmp.bb.mol2 | awk '{print $9}')
     echo "Replacing sugar O3' $VALSO with backbone OP3 $VALBO"
     sed "s/$VALSO/$VALBO/" tmp.sugar.mol2 > tmp.o3.sugar.mol2
 
@@ -327,20 +336,7 @@ EOF
     else
       # No modification
       cp tmp.base.mol2 tmp2.base.mol2
-      #VALC=$(grep "C1' " $DATBA/$BASE.mol2 | awk '{print $9}')
-      #VALH=$(grep "H1' " $DATBA/$BASE.mol2 | awk '{print $9}')
-      #sed "s/0.043100/$VALC/;s/0.183800/$VALH/" tmp.sugar.mol2 > tmp2.sugar.mol2
-#exit 0
     fi # END base modifications
-
-       #for all situations, do the following
-      #cp $DATBB/$BACKBONE.mol2 tmp.backbone.mol2
-      #VALSO=$(grep "O3' " tmp2.sugar.mol2 | awk '{print $9}')
-      #CHRISTINA: recheck backbone OP3 vs O3' names in final modules!!!
-      #VALBO=$(grep "OP3 " $DATBB/$BACKBONE.mol2 | awk '{print $9}')
-      #sed "s/$VALSO/$VALBO/" tmp2.sugar.mol2 > tmp3.sugar.mol2   
-
-#exit 0
 
     ## Strip fragments from capping groups
     ## Adjust the charge for each fragment
@@ -348,14 +344,26 @@ EOF
 ### BACKBONE
 parm tmp.bb.mol2 name backbone
 trajin tmp.bb.mol2 parm backbone
-strip $HEAD01BACKBONESTRIP
+EOF
+
+    if [ $IS_5CAP -eq 0 ]; then
+      echo "strip $HEAD01BACKBONESTRIP" >> tmp.strip.cpptraj
+    fi
+
+    cat >> tmp.strip.cpptraj<<EOF
 strip $TAIL01BACKBONESTRIP charge -0.8832
 trajout tmp.backbone-striped.mol2 mol2
 run
 clear all
 parm tmp2.sugar.mol2 name sugar
 trajin tmp2.sugar.mol2 parm sugar
-strip $TAIL01SUGARSTRIP
+EOF
+
+    if [ $IS_3CAP -eq 0 ]; then	
+	echo "strip $TAIL01SUGARSTRIP" >> tmp.strip.cpptraj
+    fi
+    
+    cat >> tmp.strip.cpptraj<<EOF
 strip $ANCHOR03SUGARSTRIP
 strip $HEAD01SUGARSTRIP charge -0.01191
 trajout tmp.sugar-striped.mol2 mol2
@@ -366,7 +374,7 @@ trajin tmp2.base.mol2 parm base
 strip $HEAD01BASESTRIP charge -0.10489
 trajout tmp.base-striped.mol2 mol2
 EOF
-
+    
     ## Run CPPTRAJ, create stripped backbone and sugar
     cpptraj -i tmp.strip.cpptraj
     if [ $? -ne 0 ] ; then
@@ -418,7 +426,6 @@ EOF
       exit 1
     fi
     
-#exit 0
     ###########################################
     ## OPTIMIZATION
     ############################################
@@ -429,8 +436,8 @@ EOF
 ###########################################
 source leaprc.protein.ff19SB
 source leaprc.DNA.OL15
-#source leaprc.RNA.OL3
-#source leaprc.gaff2
+source leaprc.RNA.OL3
+source leaprc.gaff
 ###########################################
 addpath $DAT/dat
 loadamberparams frcmod.modxna
@@ -447,8 +454,7 @@ EOF
     cat > tmp.opt.in<<EOF
 energy minimization
  &cntrl
-  imin=1,maxcyc=2000,ntx=1,ntwr=100,ntpr=10,
-  ioutfm=0,ntxo=1,cut=1000.0,ntb=0,igb=5,
+  imin=1,maxcyc=5000,ncyc=2500,ntx=1,ntwr=100,ntpr=10,ioutfm=0,ntxo=1,cut=1000.0,ntb=0,igb=5,
  &end
 EOF
 
@@ -464,6 +470,7 @@ EOF
 ###########################################
 source leaprc.protein.ff19SB
 source leaprc.DNA.OL15
+source leaprc.gaff
 ###########################################
 addpath $DAT/dat
 loadamberparams frcmod.modxna
@@ -471,14 +478,53 @@ loadamberparams frcmod.modxna
 $RESNAME = loadmol2 tmp.opt.mol2
 set $RESNAME restype nucleic
 set $RESNAME name $RESNAME
-set $RESNAME head $RESNAME.1.P
-set $RESNAME tail $RESNAME.1.O3' 
-saveoff $RESNAME $RESNAME.lib
-quit
 EOF
+
+    if [ $IS_5CAP -eq 1 ]; then
+      echo "set $RESNAME head 0" >> tmp.lib.tleap
+      HEAD_ATOM="None"
+    else
+      echo "set $RESNAME head $RESNAME.1.P" >> tmp.lib.tleap
+      HEAD_ATOM="P"
+    fi
+
+    if [ $IS_3CAP -eq 1 ]; then
+      echo "set $RESNAME tail 0" >> tmp.lib.tleap
+      TAIL_ATOM="None"
+    else
+      echo "set $RESNAME tail $RESNAME.1.O3'" >> tmp.lib.tleap
+      TAIL_ATOM="O3'"
+    fi
+
+    echo "saveoff $RESNAME $RESNAME.lib" >> tmp.lib.tleap
+    echo "quit" >> tmp.lib.tleap
+
     tleap -s -f tmp.lib.tleap
     
 done<$INPUT
 
-## Delete temporary files
-##trap on_exit EXIT
+# Extract information for the summary
+libfile="${RESNAME}.lib"
+HEAD_ID="none"
+TAIL_ID="none"
+
+if [[ -f "$libfile" ]]; then
+    mapfile -t connect_lines < <(awk "/!entry.${RESNAME}.unit.connect array int/{getline; head=\$1; getline; tail=\$1; print head; print tail}" "$libfile")
+    HEAD_ID="${connect_lines[0]}"
+    TAIL_ID="${connect_lines[1]}"
+fi
+
+echo
+echo "====== modXNA Summary ======"
+echo "Input file:     $INPUT"
+echo "Residue name:   $RESNAME"
+echo "5' capped:      $IS_5CAP"
+echo "3' capped:      $IS_3CAP"
+echo "HEAD atom:      $HEAD_ATOM (atom #: $HEAD_ID)"
+echo "TAIL atom:      $TAIL_ATOM (atom #: $TAIL_ID)"
+echo "----------------------------"
+echo "Input content:"
+echo "$SUMMARY_CONTENTS"
+echo "============================"
+
+exit 0
