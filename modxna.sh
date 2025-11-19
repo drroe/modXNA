@@ -80,7 +80,14 @@ IS_5CAP=0
 IS_3CAP=0
 
 # Library path for the templates
-export DAT=$(pwd)
+DAT=`dirname $0`
+DAT=$DAT
+if [ ! -d "$DAT/dat" ] ; then
+  echo "Data directory $DAT/dat not found."
+  exit 1
+fi
+export DAT
+#export DAT=$(pwd)
 export DATBB=$DAT'/dat/lib_backbone'
 export DATSU=$DAT'/dat/lib_sugar'
 export DATBA=$DAT'/dat/lib_base'
@@ -130,6 +137,7 @@ while [ ! -z "$1" ] ; do
 done
 
 echo "  INPUT FILE: $INPUT"
+echo "  DAT DIR   : $DAT"
 if [ ! -f "$INPUT" ] ; then
     echo -e "  \e[31mInput file $INPUT not found.\e[39m"
     echo "  Run -h or --help for more information."
