@@ -248,9 +248,11 @@ while read OPTLINE ; do
     # Copy O3' charge from backbone to sugar
     if [ $IS_5CAP -eq 1 ]; then
       # 5'-fragment does not have an O3' atom
-      VALBO=$(grep "O5' " tmp.bb.mol2 | awk '{print $9}')
+      VALBO=`awk '{if ($2 == "O5'\''") print $9}' tmp.bb.mol2`
+      #VALBO=$(grep "O5' " tmp.bb.mol2 | awk '{print $9}')
     else
-      VALBO=$(grep "O3' " tmp.bb.mol2 | awk '{print $9}')
+      VALBO=`awk '{if ($2 == "O3'\''") print $9}' tmp.bb.mol2`
+      #VALBO=$(grep "O3' " tmp.bb.mol2 | awk '{print $9}')
     fi    
     VALSO=$(grep "O3' " tmp.sugar.mol2 | awk '{print $9}')
     echo "Replacing sugar O3' $VALSO with backbone OP3 $VALBO"
