@@ -361,10 +361,13 @@ EOF
 
     if [ $IS_5CAP -eq 0 ]; then
       echo "strip $HEAD01BACKBONESTRIP" >> tmp.strip.cpptraj
+      TAIL01BACKBONECHARGE='charge -0.8832'
+    else
+      TAIL01BACKBONECHARGE=''
     fi
 
     cat >> tmp.strip.cpptraj<<EOF
-strip $TAIL01BACKBONESTRIP charge -0.8832
+strip $TAIL01BACKBONESTRIP $TAIL01BACKBONECHARGE
 trajout tmp.backbone-striped.mol2 mol2
 run
 clear all
