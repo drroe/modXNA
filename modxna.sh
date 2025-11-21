@@ -4,7 +4,7 @@
 ## modXNA.sh                                        ##
 ## Script to generate modified nucleotides.         ##
 ######################################################
-VERSION='1.8'
+VERSION='1.9'
 
 # Check for required programs
 if [ -z "$CPPTRAJ" ] ; then
@@ -66,8 +66,8 @@ if [ -z "$LEAP" ] ; then
   exit 1
 fi
 
-LEAP=`which sander`
-if [ -z "$LEAP" ] ; then
+SANDER=`which sander`
+if [ -z "$SANDER" ] ; then
   echo -e "  \e[31mSANDER not found.\e[39m"
   exit 1
 fi
@@ -103,15 +103,19 @@ Help() {
   echo "  -m <name>    : Optional name of generated residue instead of random name"
   echo "  --5cap       : Create a 5'-terminal residue"
   echo "  --3cap       : Create a 3'-terminal residue"
+  echo "  --clean      : Remove temporary files."
   exit 1 # Exit script after printing help
 }
 
-on_exit() {
+clean_temp_files() {
   echo ""
   echo "   Cleaning up...(remove tmp files, etc)"
-  if [ -f tmp.* ] ; then
-    rm tmp.*
-  fi
+  while [ ! -z "$1" ] ; do
+    if [ -f "$1" ] ; then
+      rm $1
+    fi
+    shift
+  done
 }
 
 # ==============================================================================
@@ -121,15 +125,17 @@ echo "----- Modified nucleotide residue Generator -----"
 echo "-------------------------------------------------"
 echo "modXNA.sh Version $VERSION"
 echo "CPPTRAJ version $cc_version_major.$cc_version_minor.$cc_version_patch detected."
-# ==============================================================================
 
+# ==============================================================================
 # Parse command line options
+CLEAN=0
 while [ ! -z "$1" ] ; do
   case "$1" in
     '-i'            ) shift ; INPUT=$1 ;;
     '-m'            ) shift ; RESNAME=$1 ;;
     '--5cap'        ) IS_5CAP=1 ;;
     '--3cap'        ) IS_3CAP=1 ;;
+    '--clean'       ) CLEAN=1 ;;
     '-h' | '--help' ) Help ; exit 0 ;;
     *               ) echo "Unrecognized command line option: $1" ; exit 1 ;;
   esac
@@ -162,7 +168,6 @@ while read OPTLINE ; do
         RESNAME0=$(cat /dev/urandom | tr -dc 'a-zA-Z' | head -c 3)
         ## Change residue name to UPPERCASE
         RESNAME=${RESNAME0^^}
-
     fi
 
     [[ $OPTLINE = \#* || -z "$OPTLINE" ]] && continue
@@ -264,7 +269,7 @@ while read OPTLINE ; do
 
     # Determine if any component is modified
     has_modifications=0
-    # Is th sugar modified?
+    # Is the sugar modified?
     sugar_has_modifications=1
     for sugarname in DC2 RC3 ; do
       if [ "$sugarname" = "$SUGAR" ] ; then
@@ -534,5 +539,9 @@ echo "----------------------------"
 echo "Input content:"
 echo "$SUMMARY_CONTENTS"
 echo "============================"
+
+if [ $CLEAN -eq 1 ] ; then
+  clean_temp_files tmp.* mdout mdinfo tmp2.base.mol2 tmp2.sugar.mol2
+fi
 
 exit 0
