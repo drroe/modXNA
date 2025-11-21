@@ -5,7 +5,7 @@
 
 CleanFiles *.lib modxna.out
 
-$MODXNA -i modxna.in -m ADE > modxna.out
+$MODXNA -i modxna.in -m ADE --clean > modxna.out
 ERR=$?
 DoTest ADE.lib.save ADE.lib
 ((ERR = $ERR + $?))
