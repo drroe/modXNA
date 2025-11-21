@@ -402,6 +402,75 @@ EOF
       echo "Error: Creation of stripped backbone and sugar failed."
       exit 1
     fi
+
+    ## If 3 capping, fix atom names/types/charges of O3' and H bound to O3'.
+    if [ $IS_3CAP -eq 1 ] ; then
+      # First change name of H bonded to O3'
+      if [ -f 'tmp.sugar.bonds.dat' ] ; then
+        rm tmp.sugar.bonds.dat
+      fi
+      cpptraj > tmp.cpptraj.out <<EOF
+parm tmp.sugar-striped.mol2
+bonds @O3' @/H out tmp.sugar.bonds.dat
+EOF
+      # Sanity checks
+      if [ ! -f 'tmp.sugar.bonds.dat' ] ; then
+        echo "Error: Could not determine H atom bonded to O3'"
+        exit 1
+      fi
+      NLINES=`cat tmp.sugar.bonds.dat | wc -l`
+      if [ $NLINES -ne 2 ] ; then
+        echo "Error: Only expected 2 lines in tmp.sugar.bonds.dat, got $NLINES"
+        exit 1
+      fi
+      H_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $5}'`
+      H_ATOM_NUM=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $7}'`
+      H_ATOM_TYPE=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $9}'`
+      echo "DEBUG: $H_ATOM_NAME, $H_ATOM_NUM, $H_ATOM_TYPE"
+      if [ "$H_ATOM_TYPE" != 'HO' ] ; then
+        echo "Error: Expected H atom bonded to O3' type to be HO, got $H_ATOM_TYPE"
+        exit 1
+      fi
+      if [ "$H_ATOM_NAME" != ":1$TAIL01SUGARSTRIP" ] ; then
+        echo "Error: Expected H atom bonded to O3' mask name to be :1$TAIL01SUGARSTRIP, got $H_ATOM_NAME"
+        exit 1
+      fi
+      cpptraj >> tmp.cpptraj.out <<EOF
+parm tmp.sugar-striped.mol2
+trajin tmp.sugar-striped.mol2
+change atomname from $H_ATOM_NAME to HO3'
+trajout tmp2.sugar-stripped.mol2
+EOF
+      if [ $? -ne 0 ] ; then
+        echo "Error: Changing H atom bonded to O3' atom name failed. Check tmp.cpptraj.out."
+        exit 1
+      fi
+      mv tmp2.sugar-stripped.mol2 tmp.sugar-striped.mol2
+      # Next change atom type of O3' to OH
+      # TODO implement 'change atomtype' in cpptraj
+      awk 'BEGIN{in_atom = 0; changed = 0;}{
+        if (in_atom == 0) {
+          if ($1 == "@<TRIPOS>ATOM")
+            in_atom = 1;
+          print $0;
+        } else {
+          if ($2 == "O3'\''") {
+            printf("%7i %-8s %9.4f %9.4f %9.4f %-5s %6i %-6s %10.6f\n", $1, $2, $3, $4, $5, "OH", $7, $8, $9);
+            changed = 1;
+            in_atom = 0;
+          } else
+            print $0;
+        }
+      }END{
+        if (changed == 0) exit 1;
+        exit 0;
+      }' tmp.sugar-striped.mol2 > tmp2.sugar-stripped.mol2
+      if [ $? -ne 0 ] ; then
+        echo "Error: Changing atom type of O3' atom failed."
+        exit 1
+      fi
+      mv tmp2.sugar-stripped.mol2 tmp.sugar-striped.mol2
+    fi
     
     ## Combine backbone and sugar fragments
     cat > tmp.combine.cpptraj<<EOF
