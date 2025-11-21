@@ -129,6 +129,7 @@ echo "CPPTRAJ version $cc_version_major.$cc_version_minor.$cc_version_patch dete
 # ==============================================================================
 # Parse command line options
 CLEAN=0
+DO_MINIMIZATION=1
 while [ ! -z "$1" ] ; do
   case "$1" in
     '-i'            ) shift ; INPUT=$1 ;;
@@ -136,6 +137,8 @@ while [ ! -z "$1" ] ; do
     '--5cap'        ) IS_5CAP=1 ;;
     '--3cap'        ) IS_3CAP=1 ;;
     '--clean'       ) CLEAN=1 ;;
+    # Intended for testing only, no Help entry
+    '--nomin'       ) DO_MINIMIZATION=0 ;;
     '-h' | '--help' ) Help ; exit 0 ;;
     *               ) echo "Unrecognized command line option: $1" ; exit 1 ;;
   esac
@@ -469,10 +472,15 @@ EOF
     tleap -s -f tmp.opt.tleap
 
     ## Run 2000 frames of minimization
+    if [ $DO_MINIMIZATION -eq 1 ] ; then
+      MAXCYC=5000
+    else
+      MAXCYC=1
+    fi
     cat > tmp.opt.in<<EOF
 energy minimization
  &cntrl
-  imin=1,maxcyc=5000,ncyc=2500,ntx=1,ntwr=100,ntpr=10,ioutfm=0,ntxo=1,cut=1000.0,ntb=0,igb=5,
+  imin=1,maxcyc=$MAXCYC,ncyc=2500,ntx=1,ntwr=100,ntpr=10,ioutfm=0,ntxo=1,cut=1000.0,ntb=0,igb=5,
  &end
 EOF
 
