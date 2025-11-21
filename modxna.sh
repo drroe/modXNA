@@ -130,6 +130,12 @@ echo "CPPTRAJ version $cc_version_major.$cc_version_minor.$cc_version_patch dete
 # Parse command line options
 CLEAN=0
 DO_MINIMIZATION=1
+# Expected charge of a 5-capped nucleotide
+CHARGE_5CAP='-0.320348'
+# Expected charge of a 3-capped nucleotide
+CHARGE_3CAP='-0.679652'
+# Charge to set 3-capped O3' to; needed to solve for charge of HO3'
+CHARGE_O3p='-0.4'
 while [ ! -z "$1" ] ; do
   case "$1" in
     '-i'            ) shift ; INPUT=$1 ;;
@@ -403,7 +409,7 @@ EOF
       exit 1
     fi
 
-    ## If 3 capping, fix atom names/types/charges of O3' and H bound to O3'.
+    ## If 3 capping fix atom type of O3' and name of H bound to O3'.
     if [ $IS_3CAP -eq 1 ] ; then
       # First change name of H bonded to O3'
       if [ -f 'tmp.sugar.bonds.dat' ] ; then
@@ -423,10 +429,11 @@ EOF
         echo "Error: Only expected 2 lines in tmp.sugar.bonds.dat, got $NLINES"
         exit 1
       fi
+      O_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $4}'`
       H_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $5}'`
       H_ATOM_NUM=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $7}'`
       H_ATOM_TYPE=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $9}'`
-      echo "DEBUG: $H_ATOM_NAME, $H_ATOM_NUM, $H_ATOM_TYPE"
+      echo "3CAP: O3' atom name $O_ATOM_NAME, H atom name $H_ATOM_NAME, H atom num $H_ATOM_NUM, H atom type $H_ATOM_TYPE"
       if [ "$H_ATOM_TYPE" != 'HO' ] ; then
         echo "Error: Expected H atom bonded to O3' type to be HO, got $H_ATOM_TYPE"
         exit 1
@@ -508,6 +515,21 @@ sequence Base BackboneSugar name Nucleotide
 change crdset Nucleotide mergeres firstres 1 lastres 2
 change crdset Nucleotide resname from * to $RESNAME
 change crdset Nucleotide oresnums of :1 min 1 max 1
+EOF
+    if [ $IS_3CAP -eq 1 ] ; then
+      # Modify O3' and HO3' charges for 3-cap
+      cat >> tmp.combine.cpptraj <<EOF
+# Charge on all atoms but O3' and HO3'
+set Q1 = crdset Nucleotide charge inmask !@O3',HO3'
+# Charge on all atoms plus O3'
+Q2 = \$Q1 + $CHARGE_O3p
+# What does charge on HO3' need to be to get target total 3cap charge?
+Q3 = $CHARGE_3CAP - \$Q2
+change crdset Nucleotide charge of @HO3' to \$Q3
+change crdset Nucleotide charge of @O3' to $CHARGE_O3p
+EOF
+    fi
+    cat >> tmp.combine.cpptraj <<EOF
 crdout Nucleotide tmp.Nucleotide.mol2
 EOF
     cpptraj -i tmp.combine.cpptraj
@@ -540,7 +562,7 @@ quit
 EOF
     tleap -s -f tmp.opt.tleap
 
-    ## Run 2000 frames of minimization
+    ## Run MAXCYC frames of minimization
     if [ $DO_MINIMIZATION -eq 1 ] ; then
       MAXCYC=5000
     else
@@ -555,6 +577,10 @@ EOF
 
     echo "   > Running GB optimization"
     sander -O -i tmp.opt.in -p tmp.opt.topo -c tmp.opt.coords -r tmp.opt.ncrst
+    if [ $? -ne 0 ] ; then
+      echo "Error: GB optimization failed. Check mdout."
+      exit 1
+    fi
 
     ## Generate check files from the optimization
     cpptraj -p tmp.opt.topo -y tmp.opt.ncrst -x tmp.opt.pdb
