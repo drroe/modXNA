@@ -1,6 +1,6 @@
 !!index array str
- "MFD"
-!entry.MFD.unit.atoms table  str name  str type  int typex  int resx  int flags  int seq  int elmnt  dbl chg
+ "ADE"
+!entry.ADE.unit.atoms table  str name  str type  int typex  int resx  int flags  int seq  int elmnt  dbl chg
  "N9" "N*" 0 1 131072 1 7 -0.026798
  "C8" "C2" 0 1 131072 2 6 0.160711
  "H8" "H5" 0 1 131072 3 1 0.187713
@@ -33,7 +33,7 @@
  "O3'" "OS" 0 1 131072 30 8 -0.522908
  "H1'" "H2" 0 1 131072 31 1 0.183902
  "H2''" "HC" 0 1 131072 32 1 0.071840
-!entry.MFD.unit.atomspertinfo table  str pname  str ptype  int ptypex  int pelmnt  dbl pchg
+!entry.ADE.unit.atomspertinfo table  str pname  str ptype  int ptypex  int pelmnt  dbl pchg
  "N9" "N*" 0 -1 0.0
  "C8" "C2" 0 -1 0.0
  "H8" "H5" 0 -1 0.0
@@ -66,18 +66,18 @@
  "O3'" "OS" 0 -1 0.0
  "H1'" "H2" 0 -1 0.0
  "H2''" "HC" 0 -1 0.0
-!entry.MFD.unit.boundbox array dbl
+!entry.ADE.unit.boundbox array dbl
  -1.000000
  0.0
  0.0
  0.0
  0.0
-!entry.MFD.unit.childsequence single int
+!entry.ADE.unit.childsequence single int
  2
-!entry.MFD.unit.connect array int
+!entry.ADE.unit.connect array int
  15
  30
-!entry.MFD.unit.connectivity table  int atom1x  int atom2x  int flags
+!entry.ADE.unit.connectivity table  int atom1x  int atom2x  int flags
  1 2 1
  1 14 1
  1 25 1
@@ -112,7 +112,7 @@
  26 27 1
  28 29 1
  28 32 1
-!entry.MFD.unit.hierarchy table  str abovetype  int abovex  str belowtype  int belowx
+!entry.ADE.unit.hierarchy table  str abovetype  int abovex  str belowtype  int belowx
  "U" 0 "R" 1
  "R" 1 "A" 1
  "R" 1 "A" 2
@@ -146,9 +146,9 @@
  "R" 1 "A" 30
  "R" 1 "A" 31
  "R" 1 "A" 32
-!entry.MFD.unit.name single str
+!entry.ADE.unit.name single str
  "Cpptraj"
-!entry.MFD.unit.positions table  dbl x  dbl y  dbl z
+!entry.ADE.unit.positions table  dbl x  dbl y  dbl z
  2.488800 -0.318000 -0.715000
  2.740900 0.895300 -1.315500
  1.948800 1.521200 -1.715000
@@ -181,19 +181,19 @@
  -1.017200 -2.500400 0.991500
  1.302200 -2.006100 -0.684200
  1.212000 -1.513200 1.661900
-!entry.MFD.unit.residueconnect table  int c1x  int c2x  int c3x  int c4x  int c5x  int c6x
+!entry.ADE.unit.residueconnect table  int c1x  int c2x  int c3x  int c4x  int c5x  int c6x
  0 0 0 0 0 0
-!entry.MFD.unit.residues table  str name  int seq  int childseq  int startatomx  str restype  int imagingx
- "MFD" 1 33 1 "n" 0
-!entry.MFD.unit.residuesPdbSequenceNumber array int
+!entry.ADE.unit.residues table  str name  int seq  int childseq  int startatomx  str restype  int imagingx
+ "ADE" 1 33 1 "n" 0
+!entry.ADE.unit.residuesPdbSequenceNumber array int
  0
-!entry.MFD.unit.solventcap array dbl
+!entry.ADE.unit.solventcap array dbl
  -1.000000
  0.0
  0.0
  0.0
  0.0
-!entry.MFD.unit.velocities table  dbl x  dbl y  dbl z
+!entry.ADE.unit.velocities table  dbl x  dbl y  dbl z
  0.0 0.0 0.0
  0.0 0.0 0.0
  0.0 0.0 0.0
