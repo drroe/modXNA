@@ -156,7 +156,7 @@ fi
 sed -i '/^$/d' $INPUT
 
 # Read input file
-echo "  Reading input from file:$INPUT"
+echo "  Reading input from file: $INPUT"
 
 while read OPTLINE ; do
 
