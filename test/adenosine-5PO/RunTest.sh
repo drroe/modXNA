@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Basic adenosine test
+# adenosine with 5' cap test
 . ../TestCommon.sh
 
 CleanFiles *.lib modxna.out
