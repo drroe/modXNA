@@ -411,13 +411,17 @@ EOF
 
     ## If 3 capping fix atom type of O3' and name of H bound to O3'.
     if [ $IS_3CAP -eq 1 ] ; then
+      for TMPFILE in tmp.sugar.bonds.dat tmp.sugar.o2p.dat tmp.sugar.ho2p.dat ; do
+        if [ -f "$TMPFILE" ] ; then
+          rm $TMPFILE
+        fi
+      done
       # First change name of H bonded to O3'
-      if [ -f 'tmp.sugar.bonds.dat' ] ; then
-        rm tmp.sugar.bonds.dat
-      fi
-      cpptraj > tmp.cpptraj.out <<EOF
+      cpptraj > tmp.cpptraj.out 2>&1 <<EOF
 parm tmp.sugar-striped.mol2
 bonds @O3' @/H out tmp.sugar.bonds.dat
+atoms @O2'  out tmp.sugar.o2p.dat  noheader
+atoms @HO2' out tmp.sugar.ho2p.dat noheader
 EOF
       # Sanity checks
       if [ ! -f 'tmp.sugar.bonds.dat' ] ; then
@@ -441,6 +445,12 @@ EOF
       if [ "$H_ATOM_NAME" != ":1$TAIL01SUGARSTRIP" ] ; then
         echo "Error: Expected H atom bonded to O3' mask name to be :1$TAIL01SUGARSTRIP, got $H_ATOM_NAME"
         exit 1
+      fi
+      # Check if O2'/HO2' is present
+      NLINES=`cat tmp.sugar.o2p.dat | wc -l`
+      NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
+      if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
+        echo "3CAP: O2'/HO2' is present."
       fi
       cpptraj >> tmp.cpptraj.out <<EOF
 parm tmp.sugar-striped.mol2
