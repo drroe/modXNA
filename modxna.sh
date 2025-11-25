@@ -410,6 +410,8 @@ EOF
     fi
 
     ## If 3 capping fix atom type of O3' and name of H bound to O3'.
+    Q_O2P=''
+    Q_HO2P=''
     if [ $IS_3CAP -eq 1 ] ; then
       for TMPFILE in tmp.sugar.bonds.dat tmp.sugar.o2p.dat tmp.sugar.ho2p.dat ; do
         if [ -f "$TMPFILE" ] ; then
@@ -450,7 +452,9 @@ EOF
       NLINES=`cat tmp.sugar.o2p.dat | wc -l`
       NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
       if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
-        echo "3CAP: O2'/HO2' is present."
+        Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
+        Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
+        echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
       fi
       cpptraj >> tmp.cpptraj.out <<EOF
 parm tmp.sugar-striped.mol2
@@ -538,6 +542,20 @@ Q3 = $CHARGE_3CAP - \$Q2
 change crdset Nucleotide charge of @HO3' to \$Q3
 change crdset Nucleotide charge of @O3' to $CHARGE_O3p
 EOF
+      if [ ! -z "$Q_O2P" -a ! -z "$Q_HO2P" ] ; then
+        # Equivalence the charges on O3'/HO3' and O2'/HO2'
+        cat >> tmp.combine.cpptraj <<EOF
+# Average O2'/O3' charge
+QO23 = ($Q_O2P + $CHARGE_O3p) / 2.0
+# Average HO2'/HO3' charge
+QH23 = ($Q_HO2P + \$Q3) / 2.0
+# Set the new equivalenced charges
+change crdset Nucleotide charge of @O2' to \$QO23
+change crdset Nucleotide charge of @O3' to \$QO23
+change crdset Nucleotide charge of @HO2' to \$QH23
+change crdset Nucleotide charge of @HO3' to \$QH23
+EOF
+      fi
     fi
     cat >> tmp.combine.cpptraj <<EOF
 crdout Nucleotide tmp.Nucleotide.mol2
