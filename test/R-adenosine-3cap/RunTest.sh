@@ -5,9 +5,9 @@
 
 CleanFiles *.lib modxna.out
 
-$MODXNA -i modxna.in -m AR3 --3cap --nomin > modxna.out
+$MODXNA -i modxna.in -m AR3 --3cap --clean --nomin > modxna.out
 ERR=$?
-#DoTest AR3.lib.save AR3.lib
+DoTest AR3.lib.save AR3.lib
 ((ERR = $ERR + $?))
 
 exit $ERR
