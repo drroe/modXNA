@@ -4,7 +4,7 @@
 ## modXNA.sh                                        ##
 ## Script to generate modified nucleotides.         ##
 ######################################################
-VERSION='1.9'
+VERSION='1.9.1'
 
 # Check for required programs
 if [ -z "$CPPTRAJ" ] ; then
