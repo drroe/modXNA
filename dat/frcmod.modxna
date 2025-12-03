@@ -26,7 +26,6 @@ H4 1.0080
 H5 1.0080
 HA 1.0080
 HC 1.0080
-HC 1.0080
 HO 1.0080
 HP 1.0080
 I  126.90 
@@ -212,7 +211,8 @@ N*-CT	334.7	1.467	same as c3-na
 N*-CZ	452	1.456	same as c1-na
 N*-H	406.6	0.997	same as hn-na
 N -H	410.2	0.998	same as hn-n
-N -NA	248.3   [1.4070      SOURCE3_SOURCE5      56      0.0060N*-C	424	1.386	same as c -na
+N -NA	248.3   1.4070      SOURCE3_SOURCE5      56      0.0060
+N*-C	424	1.386	same as c -na
 N*-NB	300.5   1.3560      SOURCE3_SOURCE5     899      0.0083
 NT-H	394.1	1.002	same as hn-n3
 NT-N2	219.3   1.442      SOURCE1_SOURCE5      48      0.0063
