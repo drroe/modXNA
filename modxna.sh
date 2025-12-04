@@ -4,7 +4,7 @@
 ## modXNA.sh                                        ##
 ## Script to generate modified nucleotides.         ##
 ######################################################
-VERSION='1.8'
+VERSION='1.9.1'
 
 # Check for required programs
 if [ -z "$CPPTRAJ" ] ; then
@@ -66,8 +66,8 @@ if [ -z "$LEAP" ] ; then
   exit 1
 fi
 
-LEAP=`which sander`
-if [ -z "$LEAP" ] ; then
+SANDER=`which sander`
+if [ -z "$SANDER" ] ; then
   echo -e "  \e[31mSANDER not found.\e[39m"
   exit 1
 fi
@@ -103,15 +103,19 @@ Help() {
   echo "  -m <name>    : Optional name of generated residue instead of random name"
   echo "  --5cap       : Create a 5'-terminal residue"
   echo "  --3cap       : Create a 3'-terminal residue"
+  echo "  --clean      : Remove temporary files."
   exit 1 # Exit script after printing help
 }
 
-on_exit() {
+clean_temp_files() {
   echo ""
   echo "   Cleaning up...(remove tmp files, etc)"
-  if [ -f tmp.* ] ; then
-    rm tmp.*
-  fi
+  while [ ! -z "$1" ] ; do
+    if [ -f "$1" ] ; then
+      rm $1
+    fi
+    shift
+  done
 }
 
 # ==============================================================================
@@ -121,15 +125,26 @@ echo "----- Modified nucleotide residue Generator -----"
 echo "-------------------------------------------------"
 echo "modXNA.sh Version $VERSION"
 echo "CPPTRAJ version $cc_version_major.$cc_version_minor.$cc_version_patch detected."
-# ==============================================================================
 
+# ==============================================================================
 # Parse command line options
+CLEAN=0
+DO_MINIMIZATION=1
+# Expected charge of a 5-capped nucleotide
+CHARGE_5CAP='-0.320348'
+# Expected charge of a 3-capped nucleotide
+CHARGE_3CAP='-0.679652'
+# Charge to set 3-capped O3' to; needed to solve for charge of HO3'
+CHARGE_O3p='-0.4'
 while [ ! -z "$1" ] ; do
   case "$1" in
     '-i'            ) shift ; INPUT=$1 ;;
     '-m'            ) shift ; RESNAME=$1 ;;
     '--5cap'        ) IS_5CAP=1 ;;
     '--3cap'        ) IS_3CAP=1 ;;
+    '--clean'       ) CLEAN=1 ;;
+    # Intended for testing only, no Help entry
+    '--nomin'       ) DO_MINIMIZATION=0 ;;
     '-h' | '--help' ) Help ; exit 0 ;;
     *               ) echo "Unrecognized command line option: $1" ; exit 1 ;;
   esac
@@ -150,7 +165,7 @@ fi
 sed -i '/^$/d' $INPUT
 
 # Read input file
-echo "  Reading input from file:$INPUT"
+echo "  Reading input from file: $INPUT"
 
 while read OPTLINE ; do
 
@@ -162,7 +177,6 @@ while read OPTLINE ; do
         RESNAME0=$(cat /dev/urandom | tr -dc 'a-zA-Z' | head -c 3)
         ## Change residue name to UPPERCASE
         RESNAME=${RESNAME0^^}
-
     fi
 
     [[ $OPTLINE = \#* || -z "$OPTLINE" ]] && continue
@@ -243,9 +257,11 @@ while read OPTLINE ; do
     # Copy O3' charge from backbone to sugar
     if [ $IS_5CAP -eq 1 ]; then
       # 5'-fragment does not have an O3' atom
-      VALBO=$(grep "O5' " tmp.bb.mol2 | awk '{print $9}')
+      VALBO=`awk '{if ($2 == "O5'\''") print $9}' tmp.bb.mol2`
+      #VALBO=$(grep "O5' " tmp.bb.mol2 | awk '{print $9}')
     else
-      VALBO=$(grep "O3' " tmp.bb.mol2 | awk '{print $9}')
+      VALBO=`awk '{if ($2 == "O3'\''") print $9}' tmp.bb.mol2`
+      #VALBO=$(grep "O3' " tmp.bb.mol2 | awk '{print $9}')
     fi    
     VALSO=$(grep "O3' " tmp.sugar.mol2 | awk '{print $9}')
     echo "Replacing sugar O3' $VALSO with backbone OP3 $VALBO"
@@ -264,7 +280,7 @@ while read OPTLINE ; do
 
     # Determine if any component is modified
     has_modifications=0
-    # Is th sugar modified?
+    # Is the sugar modified?
     sugar_has_modifications=1
     for sugarname in DC2 RC3 ; do
       if [ "$sugarname" = "$SUGAR" ] ; then
@@ -356,10 +372,13 @@ EOF
 
     if [ $IS_5CAP -eq 0 ]; then
       echo "strip $HEAD01BACKBONESTRIP" >> tmp.strip.cpptraj
+      TAIL01BACKBONECHARGE='charge -0.8832'
+    else
+      TAIL01BACKBONECHARGE=''
     fi
 
     cat >> tmp.strip.cpptraj<<EOF
-strip $TAIL01BACKBONESTRIP charge -0.8832
+strip $TAIL01BACKBONESTRIP $TAIL01BACKBONECHARGE
 trajout tmp.backbone-striped.mol2 mol2
 run
 clear all
@@ -388,6 +407,90 @@ EOF
     if [ $? -ne 0 ] ; then
       echo "Error: Creation of stripped backbone and sugar failed."
       exit 1
+    fi
+
+    ## If 3 capping fix atom type of O3' and name of H bound to O3'.
+    Q_O2P=''
+    Q_HO2P=''
+    if [ $IS_3CAP -eq 1 ] ; then
+      for TMPFILE in tmp.sugar.bonds.dat tmp.sugar.o2p.dat tmp.sugar.ho2p.dat ; do
+        if [ -f "$TMPFILE" ] ; then
+          rm $TMPFILE
+        fi
+      done
+      # First change name of H bonded to O3'
+      cpptraj > tmp.cpptraj.out 2>&1 <<EOF
+parm tmp.sugar-striped.mol2
+bonds @O3' @/H out tmp.sugar.bonds.dat
+atoms @O2'  out tmp.sugar.o2p.dat  noheader
+atoms @HO2' out tmp.sugar.ho2p.dat noheader
+EOF
+      # Sanity checks
+      if [ ! -f 'tmp.sugar.bonds.dat' ] ; then
+        echo "Error: Could not determine H atom bonded to O3'"
+        exit 1
+      fi
+      NLINES=`cat tmp.sugar.bonds.dat | wc -l`
+      if [ $NLINES -ne 2 ] ; then
+        echo "Error: Only expected 2 lines in tmp.sugar.bonds.dat, got $NLINES"
+        exit 1
+      fi
+      O_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $4}'`
+      H_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $5}'`
+      H_ATOM_NUM=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $7}'`
+      H_ATOM_TYPE=`tail -n 1 tmp.sugar.bonds.dat | awk '{print $9}'`
+      echo "3CAP: O3' atom name $O_ATOM_NAME, H atom name $H_ATOM_NAME, H atom num $H_ATOM_NUM, H atom type $H_ATOM_TYPE"
+      if [ "$H_ATOM_TYPE" != 'HO' ] ; then
+        echo "Error: Expected H atom bonded to O3' type to be HO, got $H_ATOM_TYPE"
+        exit 1
+      fi
+      if [ "$H_ATOM_NAME" != ":1$TAIL01SUGARSTRIP" ] ; then
+        echo "Error: Expected H atom bonded to O3' mask name to be :1$TAIL01SUGARSTRIP, got $H_ATOM_NAME"
+        exit 1
+      fi
+      # Check if O2'/HO2' is present
+      NLINES=`cat tmp.sugar.o2p.dat | wc -l`
+      NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
+      if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
+        Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
+        Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
+        echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
+      fi
+      cpptraj >> tmp.cpptraj.out <<EOF
+parm tmp.sugar-striped.mol2
+trajin tmp.sugar-striped.mol2
+change atomname from $H_ATOM_NAME to HO3'
+trajout tmp2.sugar-stripped.mol2
+EOF
+      if [ $? -ne 0 ] ; then
+        echo "Error: Changing H atom bonded to O3' atom name failed. Check tmp.cpptraj.out."
+        exit 1
+      fi
+      mv tmp2.sugar-stripped.mol2 tmp.sugar-striped.mol2
+      # Next change atom type of O3' to OH
+      # TODO implement 'change atomtype' in cpptraj
+      awk 'BEGIN{in_atom = 0; changed = 0;}{
+        if (in_atom == 0) {
+          if ($1 == "@<TRIPOS>ATOM")
+            in_atom = 1;
+          print $0;
+        } else {
+          if ($2 == "O3'\''") {
+            printf("%7i %-8s %9.4f %9.4f %9.4f %-5s %6i %-6s %10.6f\n", $1, $2, $3, $4, $5, "OH", $7, $8, $9);
+            changed = 1;
+            in_atom = 0;
+          } else
+            print $0;
+        }
+      }END{
+        if (changed == 0) exit 1;
+        exit 0;
+      }' tmp.sugar-striped.mol2 > tmp2.sugar-stripped.mol2
+      if [ $? -ne 0 ] ; then
+        echo "Error: Changing atom type of O3' atom failed."
+        exit 1
+      fi
+      mv tmp2.sugar-stripped.mol2 tmp.sugar-striped.mol2
     fi
     
     ## Combine backbone and sugar fragments
@@ -426,6 +529,35 @@ sequence Base BackboneSugar name Nucleotide
 change crdset Nucleotide mergeres firstres 1 lastres 2
 change crdset Nucleotide resname from * to $RESNAME
 change crdset Nucleotide oresnums of :1 min 1 max 1
+EOF
+    if [ $IS_3CAP -eq 1 ] ; then
+      # Modify O3' and HO3' charges for 3-cap
+      cat >> tmp.combine.cpptraj <<EOF
+# Charge on all atoms but O3' and HO3'
+set Q1 = crdset Nucleotide charge inmask !@O3',HO3'
+# Charge on all atoms plus O3'
+Q2 = \$Q1 + $CHARGE_O3p
+# What does charge on HO3' need to be to get target total 3cap charge?
+Q3 = $CHARGE_3CAP - \$Q2
+change crdset Nucleotide charge of @HO3' to \$Q3
+change crdset Nucleotide charge of @O3' to $CHARGE_O3p
+EOF
+      if [ ! -z "$Q_O2P" -a ! -z "$Q_HO2P" ] ; then
+        # Equivalence the charges on O3'/HO3' and O2'/HO2'
+        cat >> tmp.combine.cpptraj <<EOF
+# Average O2'/O3' charge
+QO23 = ($Q_O2P + $CHARGE_O3p) / 2.0
+# Average HO2'/HO3' charge
+QH23 = ($Q_HO2P + \$Q3) / 2.0
+# Set the new equivalenced charges
+change crdset Nucleotide charge of @O2' to \$QO23
+change crdset Nucleotide charge of @O3' to \$QO23
+change crdset Nucleotide charge of @HO2' to \$QH23
+change crdset Nucleotide charge of @HO3' to \$QH23
+EOF
+      fi
+    fi
+    cat >> tmp.combine.cpptraj <<EOF
 crdout Nucleotide tmp.Nucleotide.mol2
 EOF
     cpptraj -i tmp.combine.cpptraj
@@ -458,16 +590,25 @@ quit
 EOF
     tleap -s -f tmp.opt.tleap
 
-    ## Run 2000 frames of minimization
+    ## Run MAXCYC frames of minimization
+    if [ $DO_MINIMIZATION -eq 1 ] ; then
+      MAXCYC=5000
+    else
+      MAXCYC=1
+    fi
     cat > tmp.opt.in<<EOF
 energy minimization
  &cntrl
-  imin=1,maxcyc=5000,ncyc=2500,ntx=1,ntwr=100,ntpr=10,ioutfm=0,ntxo=1,cut=1000.0,ntb=0,igb=5,
+  imin=1,maxcyc=$MAXCYC,ncyc=2500,ntx=1,ntwr=100,ntpr=10,ioutfm=0,ntxo=1,cut=1000.0,ntb=0,igb=5,
  &end
 EOF
 
     echo "   > Running GB optimization"
     sander -O -i tmp.opt.in -p tmp.opt.topo -c tmp.opt.coords -r tmp.opt.ncrst
+    if [ $? -ne 0 ] ; then
+      echo "Error: GB optimization failed. Check mdout."
+      exit 1
+    fi
 
     ## Generate check files from the optimization
     cpptraj -p tmp.opt.topo -y tmp.opt.ncrst -x tmp.opt.pdb
@@ -534,5 +675,9 @@ echo "----------------------------"
 echo "Input content:"
 echo "$SUMMARY_CONTENTS"
 echo "============================"
+
+if [ $CLEAN -eq 1 ] ; then
+  clean_temp_files tmp.* mdout mdinfo tmp2.base.mol2 tmp2.sugar.mol2
+fi
 
 exit 0
