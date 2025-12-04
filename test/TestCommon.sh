@@ -6,6 +6,17 @@ if [ ! -f "$MODXNA" ] ; then
   exit 1
 fi
 
+# Process common test options
+CLEAN=0
+while [ ! -z "$1" ] ; do
+  case "$1" in
+    'clean' ) CLEAN=1 ;;
+    * )
+      echo "Warning: Unrecognized option $1"
+  esac
+  shift
+done
+
 CleanFiles() {
   while [ ! -z "$1" ] ; do
     if [ -f "$1" ] ; then
@@ -13,6 +24,9 @@ CleanFiles() {
     fi
     shift
   done
+  if [ $CLEAN -eq 1 ] ; then
+    exit 0
+  fi
 }
 
 DoTest() {
