@@ -122,6 +122,27 @@ clean_temp_files() {
   done
 }
 
+get_3cap_sugar_charges() {
+  if [ -z "$1" ] ; then
+    echo "Internal Error: No mol2 file given to get_3cap_sugar_charges()"
+    exit 1
+  fi
+  Q_O2P=''
+  Q_HO2P=''
+  cpptraj -p $1 <<EOF
+atoms @O2'  out tmp.sugar.o2p.dat  noheader
+atoms @HO2' out tmp.sugar.ho2p.dat noheader
+EOF
+  # Check if O2'/HO2' is present
+  NLINES=`cat tmp.sugar.o2p.dat | wc -l`
+  NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
+  if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
+    Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
+    Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
+    echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
+  fi
+}
+
 # ==============================================================================
 echo "-------------------------------------------------"
 echo "-----               modXNA                  -----"
@@ -359,8 +380,6 @@ EOF
       cpptraj > tmp.cpptraj.out 2>&1 <<EOF
 parm tmp2.sugar.mol2
 bonds @O3' @/H out tmp.sugar.bonds.dat
-#atoms @O2'  out tmp.sugar.o2p.dat  noheader
-#atoms @HO2' out tmp.sugar.ho2p.dat noheader
 EOF
       # Sanity checks
       if [ ! -f 'tmp.sugar.bonds.dat' ] ; then
@@ -391,14 +410,6 @@ EOF
         echo "Error: Expected H atom bonded to O3' mask name to be :1$TAIL01SUGARSTRIP, got $H_ATOM_NAME"
         exit 1
       fi
-      # Check if O2'/HO2' is present
-      #NLINES=`cat tmp.sugar.o2p.dat | wc -l`
-      #NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
-      #if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
-      #  Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
-      #  Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
-      #  echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
-      #fi
       cpptraj >> tmp.cpptraj.out <<EOF
 parm tmp2.sugar.mol2
 trajin tmp2.sugar.mol2
@@ -503,18 +514,7 @@ EOF
         exit 1
       fi
       if [ $IS_3CAP -eq 1 ] ; then
-        cpptraj -p tmp.sugar-striped.mol2 <<EOF
-atoms @O2'  out tmp.sugar.o2p.dat  noheader
-atoms @HO2' out tmp.sugar.ho2p.dat noheader
-EOF
-        # Check if O2'/HO2' is present
-        NLINES=`cat tmp.sugar.o2p.dat | wc -l`
-        NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
-        if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
-          Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
-          Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
-          echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
-        fi
+        get_3cap_sugar_charges tmp.sugar-striped.mol2
       fi # END 3cap charge extraction
     fi # END if cpptraj not version 7
 
@@ -589,18 +589,7 @@ EOF
         exit 1
       fi
       if [ $IS_3CAP -eq 1 ] ; then
-        cpptraj -p tmp.SugarBase.mol2 <<EOF
-atoms @O2'  out tmp.sugar.o2p.dat  noheader
-atoms @HO2' out tmp.sugar.ho2p.dat noheader
-EOF
-        # Check if O2'/HO2' is present
-        NLINES=`cat tmp.sugar.o2p.dat | wc -l`
-        NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
-        if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
-          Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
-          Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
-          echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
-        fi
+        get_3cap_sugar_charges tmp.SugarBase.mol2
       fi # END 3cap charge extraction
       # cpptraj v7 backbone + sugar + base
       cat > tmp.combine.cpptraj <<EOF
