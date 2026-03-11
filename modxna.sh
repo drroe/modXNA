@@ -546,29 +546,18 @@ change crdset Nucleotide oresnums of :1 min 1 max 1
 EOF
     else
       ## CPPTRAJ version 7 needs to use graft FIXME need to fix 3cap atom type
-      # cpptraj v7 backbone
-      cat > tmp.combine.cpptraj <<EOF
-parm tmp.bb.mol2
-loadcrd tmp.bb.mol2 parm tmp.bb.mol2 name BB
-
+      # cpptraj v7 sugar + base
+      cat > tmp.sugarbase.cpptraj <<EOF
 parm tmp2.sugar.mol2
 loadcrd tmp2.sugar.mol2 parm tmp2.sugar.mol2 name Sugar
 
 parm tmp2.base.mol2
 loadcrd tmp2.base.mol2 parm tmp2.base.mol2 name Base
-list
 EOF
-      if [ $IS_5CAP -eq 0 ]; then
-        echo "crdaction BB strip $HEAD01BACKBONESTRIP" >> tmp.combine.cpptraj
-        TAIL01BACKBONECHARGE='tgtcharge -0.8832'
-      else
-        TAIL01BACKBONECHARGE=''
-      fi
-      # cpptraj v7 sugar
       if [ $IS_3CAP -eq 0 ]; then	
-        echo "crdaction Sugar strip $TAIL01SUGARSTRIP" >> tmp.combine.cpptraj
+        echo "crdaction Sugar strip $TAIL01SUGARSTRIP" >> tmp.sugarbase.cpptraj
       fi
-      cat >> tmp.combine.cpptraj<<EOF
+      cat >> tmp.sugarbase.cpptraj<<EOF
 # Create Sugar + Base
 graft ic name SugarBase \
   tgt Sugar tgtmask !($ANCHOR03SUGARSTRIP|$HEAD01SUGARSTRIP) tgtcharge -0.01191 \
@@ -577,6 +566,27 @@ graft ic name SugarBase \
 change crdset SugarBase mergeres firstres 1 lastres 2
 change crdset SugarBase resname from * to $RESNAME
 change crdset SugarBase oresnums of :1 min 1 max 1
+crdout SugarBase tmp.SugarBase.mol2
+EOF
+      cpptraj -i tmp.sugarbase.cpptraj
+      if [ $? -ne 0 ] ; then
+        echo "Error: Creation of sugar+base failed."
+        exit 1
+      fi
+      # cpptraj v7 backbone + (sugar + base)
+      cat > tmp.combine.cpptraj <<EOF
+parm tmp.bb.mol2
+loadcrd tmp.bb.mol2 parm tmp.bb.mol2 name BB
+EOF
+      if [ $IS_5CAP -eq 0 ]; then
+        echo "crdaction BB strip $HEAD01BACKBONESTRIP" >> tmp.combine.cpptraj
+        TAIL01BACKBONECHARGE='tgtcharge -0.8832'
+      else
+        TAIL01BACKBONECHARGE=''
+      fi
+      cat >> tmp.combine.cpptraj <<EOF
+parm tmp.SugarBase.mol2
+loadcrd tmp.SugarBase.mol2 parm tmp.SugarBase.mol2 name SugarBase
 
 # Create Nucleotide from Backbone + SugarBase
 graft ic name Nucleotide \
