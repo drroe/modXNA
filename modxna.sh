@@ -506,7 +506,7 @@ EOF
     fi # END if cpptraj not version 7
 
     if [ $cpptraj7 -eq 0 ] ; then
-      ## Cpptraj < version 7
+      ## ----- Cpptraj < version 7 -----
       ## Combine backbone and sugar fragments
       cat > tmp.combine.cpptraj<<EOF
 parm tmp.sugar-striped.mol2
@@ -545,7 +545,8 @@ change crdset Nucleotide resname from * to $RESNAME
 change crdset Nucleotide oresnums of :1 min 1 max 1
 EOF
     else
-      ## CPPTRAJ version 7 needs to use graft FIXME need to fix 3cap atom type
+      ## ----- CPPTRAJ version 7 -----
+      # Needs to use graft FIXME need to fix 3cap atom type
       # cpptraj v7 sugar + base
       cat > tmp.sugarbase.cpptraj <<EOF
 parm tmp2.sugar.mol2
@@ -553,6 +554,7 @@ loadcrd tmp2.sugar.mol2 parm tmp2.sugar.mol2 name Sugar
 
 parm tmp2.base.mol2
 loadcrd tmp2.base.mol2 parm tmp2.base.mol2 name Base
+list
 EOF
       if [ $IS_3CAP -eq 0 ]; then	
         echo "crdaction Sugar strip $TAIL01SUGARSTRIP" >> tmp.sugarbase.cpptraj
@@ -570,13 +572,16 @@ crdout SugarBase tmp.SugarBase.mol2
 EOF
       cpptraj -i tmp.sugarbase.cpptraj
       if [ $? -ne 0 ] ; then
-        echo "Error: Creation of sugar+base failed."
+        echo "Error: Creation of Sugar+Base failed."
         exit 1
       fi
-      # cpptraj v7 backbone + (sugar + base)
+      # cpptraj v7 backbone + sugar + base
       cat > tmp.combine.cpptraj <<EOF
 parm tmp.bb.mol2
 loadcrd tmp.bb.mol2 parm tmp.bb.mol2 name BB
+
+parm tmp.SugarBase.mol2
+loadcrd tmp.SugarBase.mol2 parm tmp.SugarBase.mol2 name SugarBase
 EOF
       if [ $IS_5CAP -eq 0 ]; then
         echo "crdaction BB strip $HEAD01BACKBONESTRIP" >> tmp.combine.cpptraj
@@ -585,9 +590,6 @@ EOF
         TAIL01BACKBONECHARGE=''
       fi
       cat >> tmp.combine.cpptraj <<EOF
-parm tmp.SugarBase.mol2
-loadcrd tmp.SugarBase.mol2 parm tmp.SugarBase.mol2 name SugarBase
-
 # Create Nucleotide from Backbone + SugarBase
 graft ic name Nucleotide \
   tgt BB tgtmask !$TAIL01BACKBONESTRIP $TAIL01BACKBONECHARGE \
