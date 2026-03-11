@@ -346,6 +346,96 @@ EOF
       cp tmp.sugar.mol2 tmp2.sugar.mol2
     fi # END sugar modifications
 
+    ## If 3 capping fix atom type of O3' and name of H bound to O3'.
+    Q_O2P=''
+    Q_HO2P=''
+    if [ $IS_3CAP -eq 1 ] ; then
+      for TMPFILE in tmp.sugar.bonds.dat tmp.sugar.o2p.dat tmp.sugar.ho2p.dat ; do
+        if [ -f "$TMPFILE" ] ; then
+          rm $TMPFILE
+        fi
+      done
+      # First change name of H bonded to O3'
+      cpptraj > tmp.cpptraj.out 2>&1 <<EOF
+parm tmp2.sugar.mol2
+bonds @O3' @/H out tmp.sugar.bonds.dat
+atoms @O2'  out tmp.sugar.o2p.dat  noheader
+atoms @HO2' out tmp.sugar.ho2p.dat noheader
+EOF
+      # Sanity checks
+      if [ ! -f 'tmp.sugar.bonds.dat' ] ; then
+        echo "Error: Could not determine H atom bonded to O3'"
+        exit 1
+      fi
+      # Check if we have the RK/REQ columns
+      if [ "`head -n 1 tmp.sugar.bonds.dat | awk '{print $2;}'`" = 'RK' ] ; then
+        sugar_col_offset=2
+      else
+        sugar_col_offset=0
+      fi
+      NLINES=`cat tmp.sugar.bonds.dat | wc -l`
+      if [ $NLINES -ne 2 ] ; then
+        echo "Error: Only expected 2 lines in tmp.sugar.bonds.dat, got $NLINES"
+        exit 1
+      fi
+      O_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk -v offset=$sugar_col_offset '{print $(offset+2)}'`
+      H_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk -v offset=$sugar_col_offset '{print $(offset+3)}'`
+      H_ATOM_NUM=`tail -n 1 tmp.sugar.bonds.dat  | awk -v offset=$sugar_col_offset '{print $(offset+5)}'`
+      H_ATOM_TYPE=`tail -n 1 tmp.sugar.bonds.dat | awk -v offset=$sugar_col_offset '{print $(offset+7)}'`
+      echo "3CAP: O3' atom name $O_ATOM_NAME, H atom name $H_ATOM_NAME, H atom num $H_ATOM_NUM, H atom type $H_ATOM_TYPE"
+      if [ "$H_ATOM_TYPE" != 'HO' ] ; then
+        echo "Error: Expected H atom bonded to O3' type to be HO, got $H_ATOM_TYPE"
+        exit 1
+      fi
+      if [ "$H_ATOM_NAME" != ":1$TAIL01SUGARSTRIP" ] ; then
+        echo "Error: Expected H atom bonded to O3' mask name to be :1$TAIL01SUGARSTRIP, got $H_ATOM_NAME"
+        exit 1
+      fi
+      # Check if O2'/HO2' is present
+      NLINES=`cat tmp.sugar.o2p.dat | wc -l`
+      NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
+      if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
+        Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
+        Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
+        echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
+      fi
+      cpptraj >> tmp.cpptraj.out <<EOF
+parm tmp2.sugar.mol2
+trajin tmp2.sugar.mol2
+change atomname from $H_ATOM_NAME to HO3'
+trajout tmp2.sugar-stripped.mol2
+EOF
+      if [ $? -ne 0 ] ; then
+        echo "Error: Changing H atom bonded to O3' atom name failed. Check tmp.cpptraj.out."
+        exit 1
+      fi
+      mv tmp2.sugar-stripped.mol2 tmp2.sugar.mol2
+      # Next change atom type of O3' to OH
+      # TODO implement 'change atomtype' in cpptraj
+      awk 'BEGIN{in_atom = 0; changed = 0;}{
+        if (in_atom == 0) {
+          if ($1 == "@<TRIPOS>ATOM")
+            in_atom = 1;
+          print $0;
+        } else {
+          if ($2 == "O3'\''") {
+            printf("%7i %-8s %9.4f %9.4f %9.4f %-5s %6i %-6s %10.6f\n", $1, $2, $3, $4, $5, "OH", $7, $8, $9);
+            changed = 1;
+            in_atom = 0;
+          } else
+            print $0;
+        }
+      }END{
+        if (changed == 0) exit 1;
+        exit 0;
+      }' tmp2.sugar.mol2 > tmp2.sugar-stripped.mol2
+      if [ $? -ne 0 ] ; then
+        echo "Error: Changing atom type of O3' atom failed."
+        exit 1
+      fi
+      mv tmp2.sugar-stripped.mol2 tmp2.sugar.mol2
+    fi
+
     ### ADD correction factors to the base
     if [ $base_has_modifications -eq 1 ] ; then
       echo "Applying chi corrections to base"
@@ -413,95 +503,7 @@ EOF
       exit 1
     fi
 
-    ## If 3 capping fix atom type of O3' and name of H bound to O3'.
-    Q_O2P=''
-    Q_HO2P=''
-    if [ $IS_3CAP -eq 1 ] ; then
-      for TMPFILE in tmp.sugar.bonds.dat tmp.sugar.o2p.dat tmp.sugar.ho2p.dat ; do
-        if [ -f "$TMPFILE" ] ; then
-          rm $TMPFILE
-        fi
-      done
-      # First change name of H bonded to O3'
-      cpptraj > tmp.cpptraj.out 2>&1 <<EOF
-parm tmp.sugar-striped.mol2
-bonds @O3' @/H out tmp.sugar.bonds.dat
-atoms @O2'  out tmp.sugar.o2p.dat  noheader
-atoms @HO2' out tmp.sugar.ho2p.dat noheader
-EOF
-      # Sanity checks
-      if [ ! -f 'tmp.sugar.bonds.dat' ] ; then
-        echo "Error: Could not determine H atom bonded to O3'"
-        exit 1
-      fi
-      # Check if we have the RK/REQ columns
-      if [ "`head -n 1 tmp.sugar.bonds.dat | awk '{print $2;}'`" = 'RK' ] ; then
-        sugar_col_offset=2
-      else
-        sugar_col_offset=0
-      fi
-      NLINES=`cat tmp.sugar.bonds.dat | wc -l`
-      if [ $NLINES -ne 2 ] ; then
-        echo "Error: Only expected 2 lines in tmp.sugar.bonds.dat, got $NLINES"
-        exit 1
-      fi
-      O_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk -v offset=$sugar_col_offset '{print $(offset+2)}'`
-      H_ATOM_NAME=`tail -n 1 tmp.sugar.bonds.dat | awk -v offset=$sugar_col_offset '{print $(offset+3)}'`
-      H_ATOM_NUM=`tail -n 1 tmp.sugar.bonds.dat  | awk -v offset=$sugar_col_offset '{print $(offset+5)}'`
-      H_ATOM_TYPE=`tail -n 1 tmp.sugar.bonds.dat | awk -v offset=$sugar_col_offset '{print $(offset+7)}'`
-      echo "3CAP: O3' atom name $O_ATOM_NAME, H atom name $H_ATOM_NAME, H atom num $H_ATOM_NUM, H atom type $H_ATOM_TYPE"
-      if [ "$H_ATOM_TYPE" != 'HO' ] ; then
-        echo "Error: Expected H atom bonded to O3' type to be HO, got $H_ATOM_TYPE"
-        exit 1
-      fi
-      if [ "$H_ATOM_NAME" != ":1$TAIL01SUGARSTRIP" ] ; then
-        echo "Error: Expected H atom bonded to O3' mask name to be :1$TAIL01SUGARSTRIP, got $H_ATOM_NAME"
-        exit 1
-      fi
-      # Check if O2'/HO2' is present
-      NLINES=`cat tmp.sugar.o2p.dat | wc -l`
-      NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
-      if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
-        Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
-        Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
-        echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
-      fi
-      cpptraj >> tmp.cpptraj.out <<EOF
-parm tmp.sugar-striped.mol2
-trajin tmp.sugar-striped.mol2
-change atomname from $H_ATOM_NAME to HO3'
-trajout tmp2.sugar-stripped.mol2
-EOF
-      if [ $? -ne 0 ] ; then
-        echo "Error: Changing H atom bonded to O3' atom name failed. Check tmp.cpptraj.out."
-        exit 1
-      fi
-      mv tmp2.sugar-stripped.mol2 tmp.sugar-striped.mol2
-      # Next change atom type of O3' to OH
-      # TODO implement 'change atomtype' in cpptraj
-      awk 'BEGIN{in_atom = 0; changed = 0;}{
-        if (in_atom == 0) {
-          if ($1 == "@<TRIPOS>ATOM")
-            in_atom = 1;
-          print $0;
-        } else {
-          if ($2 == "O3'\''") {
-            printf("%7i %-8s %9.4f %9.4f %9.4f %-5s %6i %-6s %10.6f\n", $1, $2, $3, $4, $5, "OH", $7, $8, $9);
-            changed = 1;
-            in_atom = 0;
-          } else
-            print $0;
-        }
-      }END{
-        if (changed == 0) exit 1;
-        exit 0;
-      }' tmp.sugar-striped.mol2 > tmp2.sugar-stripped.mol2
-      if [ $? -ne 0 ] ; then
-        echo "Error: Changing atom type of O3' atom failed."
-        exit 1
-      fi
-      mv tmp2.sugar-stripped.mol2 tmp.sugar-striped.mol2
-    fi
+
     if [ $cpptraj7 -eq 0 ] ; then
       ## Combine backbone and sugar fragments
       cat > tmp.combine.cpptraj<<EOF
