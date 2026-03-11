@@ -456,22 +456,23 @@ EOF
       cp tmp.base.mol2 tmp2.base.mol2
     fi # END base modifications
 
-    ## Strip fragments from capping groups
-    ## Adjust the charge for each fragment
-    cat > tmp.strip.cpptraj<<EOF
+    if [ $cpptraj7 -eq 0 ] ; then
+      ## Strip fragments from capping groups
+      ## Adjust the charge for each fragment 
+      cat > tmp.strip.cpptraj<<EOF
 ### BACKBONE
 parm tmp.bb.mol2 name backbone
 trajin tmp.bb.mol2 parm backbone
 EOF
 
-    if [ $IS_5CAP -eq 0 ]; then
-      echo "strip $HEAD01BACKBONESTRIP" >> tmp.strip.cpptraj
-      TAIL01BACKBONECHARGE='charge -0.8832'
-    else
-      TAIL01BACKBONECHARGE=''
-    fi
+      if [ $IS_5CAP -eq 0 ]; then
+        echo "strip $HEAD01BACKBONESTRIP" >> tmp.strip.cpptraj
+        TAIL01BACKBONECHARGE='charge -0.8832'
+      else
+        TAIL01BACKBONECHARGE=''
+      fi
 
-    cat >> tmp.strip.cpptraj<<EOF
+      cat >> tmp.strip.cpptraj<<EOF
 strip $TAIL01BACKBONESTRIP $TAIL01BACKBONECHARGE
 trajout tmp.backbone-striped.mol2 mol2
 run
@@ -480,11 +481,11 @@ parm tmp2.sugar.mol2 name sugar
 trajin tmp2.sugar.mol2 parm sugar
 EOF
 
-    if [ $IS_3CAP -eq 0 ]; then	
+      if [ $IS_3CAP -eq 0 ]; then	
 	echo "strip $TAIL01SUGARSTRIP" >> tmp.strip.cpptraj
-    fi
+      fi
     
-    cat >> tmp.strip.cpptraj<<EOF
+      cat >> tmp.strip.cpptraj<<EOF
 strip $ANCHOR03SUGARSTRIP
 strip $HEAD01SUGARSTRIP charge -0.01191
 trajout tmp.sugar-striped.mol2 mol2
@@ -496,14 +497,16 @@ strip $HEAD01BASESTRIP charge -0.10489
 trajout tmp.base-striped.mol2 mol2
 EOF
     
-    ## Run CPPTRAJ, create stripped backbone and sugar
-    cpptraj -i tmp.strip.cpptraj
-    if [ $? -ne 0 ] ; then
-      echo "Error: Creation of stripped backbone and sugar failed."
-      exit 1
-    fi
+      ## Run CPPTRAJ, create stripped backbone and sugar
+      cpptraj -i tmp.strip.cpptraj
+      if [ $? -ne 0 ] ; then
+        echo "Error: Creation of stripped backbone and sugar failed."
+        exit 1
+      fi
+    fi # END if cpptraj not version 7
 
     if [ $cpptraj7 -eq 0 ] ; then
+      ## Cpptraj < version 7
       ## Combine backbone and sugar fragments
       cat > tmp.combine.cpptraj<<EOF
 parm tmp.sugar-striped.mol2
