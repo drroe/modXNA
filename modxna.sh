@@ -129,10 +129,11 @@ get_3cap_sugar_charges() {
   fi
   Q_O2P=''
   Q_HO2P=''
-  cpptraj -p $1 <<EOF
+  cat > tmp.extract.cpptraj <<EOF
 atoms @O2'  out tmp.sugar.o2p.dat  noheader
 atoms @HO2' out tmp.sugar.ho2p.dat noheader
 EOF
+  cpptraj -p $1 -i tmp.extract.cpptraj > tmp.extract.cpptraj.out 2>&1
   # Check if O2'/HO2' is present
   NLINES=`cat tmp.sugar.o2p.dat | wc -l`
   NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
