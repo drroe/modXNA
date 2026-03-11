@@ -503,7 +503,6 @@ EOF
       exit 1
     fi
 
-
     if [ $cpptraj7 -eq 0 ] ; then
       ## Combine backbone and sugar fragments
       cat > tmp.combine.cpptraj<<EOF
