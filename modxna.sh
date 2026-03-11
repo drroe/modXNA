@@ -575,6 +575,20 @@ EOF
         echo "Error: Creation of Sugar+Base failed."
         exit 1
       fi
+      if [ $IS_3CAP -eq 1 ] ; then
+        cpptraj -p tmp.SugarBase.mol2 <<EOF
+atoms @O2'  out tmp.sugar.o2p.dat  noheader
+atoms @HO2' out tmp.sugar.ho2p.dat noheader
+EOF
+        # Check if O2'/HO2' is present
+        NLINES=`cat tmp.sugar.o2p.dat | wc -l`
+        NLINES2=`cat tmp.sugar.ho2p.dat | wc -l`
+        if [ $NLINES -eq 2 -a $NLINES2 -eq 2 ] ; then
+          Q_O2P=`tail -n 1 tmp.sugar.o2p.dat | awk '{print $7;}'`
+          Q_HO2P=`tail -n 1 tmp.sugar.ho2p.dat | awk '{print $7;}'`
+          echo "3CAP: O2'($Q_O2P)/HO2'($Q_HO2P) is present."
+        fi
+      fi # END 3cap charge extraction
       # cpptraj v7 backbone + sugar + base
       cat > tmp.combine.cpptraj <<EOF
 parm tmp.bb.mol2
