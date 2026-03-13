@@ -53,6 +53,9 @@ if [ $cc_version_major -lt 6 ] ; then
   cc_version_ok=0
 elif [ $cc_version_major -eq 6 -a $cc_version_minor -lt 26 ] ; then
   cc_version_ok=0
+elif [ $cc_version_major -eq 7 -a $cc_version_minor -lt 1 ] ; then
+  echo -e "  \e[31mError: modxna.sh is incompatible with CPPTRAJ version 7.00.0\e[39m"
+  exit 1
 fi
 if [ $cc_version_ok -eq 0 ] ; then
   echo -e "  \e[31mError: CPPTRAJ version is too old. Require at least 6.26.0\e[39m"
